@@ -1,0 +1,33 @@
+services:
+    wg:
+        profiles: [disabled]
+    wg1:
+        profiles: [disabled]
+    oc:
+        profiles: [disabled]
+    np:
+        profiles: [disabled]
+    tg:
+        profiles: [disabled]
+    ss:
+        profiles: [disabled]
+    io:
+        profiles: [disabled]
+    up:
+        depends_on:
+            php:
+                condition: service_healthy
+            ng:
+                condition: service_started
+            ad:
+                condition: service_started
+            xr:
+                condition: service_started
+    service:
+        depends_on:
+            - up
+            - ng
+            - php
+            - ad
+            - xr
+            - proxy

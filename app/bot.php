@@ -143,7 +143,7 @@ class Bot
             case preg_match('~^/menu (?P<type>addpeer) (?P<arg>(?:-)?\d+)$~', $this->input['callback'], $m):
             case preg_match('~^/menu (?P<type>wg) (?P<arg>(?:-)?\d+)$~', $this->input['callback'], $m):
             case preg_match('~^/menu (?P<type>client) (?P<arg>\d+(?:_(?:-)?\d+)?)$~', $this->input['callback'], $m):
-            case preg_match('~^/menu (?P<type>pac|adguard|config|ss|lang|oc|naive|mirror|update)$~', $this->input['callback'], $m):
+            case preg_match('~^/menu (?P<type>pac|adguard|config|ss|lang|oc|naive|mirror|update|management)$~', $this->input['callback'], $m):
                 $this->menu(type: $m['type'] ?? false, arg: $m['arg'] ?? false);
                 break;
             case preg_match('~^/changeWG (\d+)$~', $this->input['callback'], $m):
@@ -211,6 +211,12 @@ class Bot
                 break;
             case preg_match('~^/autoupdate$~', $this->input['callback'], $m):
                 $this->autoupdate();
+                break;
+            case preg_match('~^/toggleVlessOnly$~', $this->input['callback'], $m):
+                $this->toggleVlessOnly();
+                break;
+            case preg_match('~^/toggleAutostart$~', $this->input['callback'], $m):
+                $this->toggleAutostart();
                 break;
             case preg_match('~^/ports$~', $this->input['callback'], $m):
                 $this->ports();
@@ -1572,7 +1578,7 @@ class Bot
                 $this->time = time();
                 $current    = file_get_contents('/version');
                 $b          = exec('git -C / rev-parse --abbrev-ref HEAD');
-                $last       = file_get_contents("https://raw.githubusercontent.com/mercurykd/vpnbot/$b/version");
+                $last       = file_get_contents("https://raw.githubusercontent.com/ang3el7z/vpnbot/$b/version");
                 if (!empty($last) && $last != $this->last && $last != $current) {
                     $this->last = $last;
                     $diff       = array_slice(explode("\n", $last), 0, count(explode("\n", $last)) - count(explode("\n", $current)));
@@ -1584,7 +1590,7 @@ class Bot
                                 [
                                     [
                                         'text'    => 'changelog',
-                                        'web_app' => ['url' => "https://raw.githubusercontent.com/mercurykd/vpnbot/$b/version"],
+                                        'web_app' => ['url' => "https://raw.githubusercontent.com/ang3el7z/vpnbot/$b/version"],
                                     ],
                                     [
                                         'text'          => $this->i18n('update bot'),
@@ -4549,33 +4555,44 @@ DNS-over-HTTPS with IP:
             }
             $main[] = '';
 
+            $vlessOnly = !empty($conf['vless_only']);
+            $statusRows = [];
+            $portRows = [];
+            
+            if (!$vlessOnly) {
+                $statusRows[] = $this->i18n($this->ssh($conf['amnezia'] ? 'awg' : 'wg', 'wg') ? 'on' : 'off') . ' ' . $this->i18n($conf['amnezia'] ? 'amnezia' : 'wg_title');
+                $statusRows[] = $this->i18n($this->ssh($conf['wg1_amnezia'] ? 'awg' : 'wg', 'wg1') ? 'on' : 'off') . ' ' . $this->i18n($conf['wg1_amnezia'] ? 'amnezia' : 'wg_title');
+                $portRows[] = $this->i18n($c['wg'] ? 'on' : 'off') . ' ' . getenv('WGPORT');
+                $portRows[] = $this->i18n($c['wg1'] ? 'on' : 'off') . ' ' . getenv('WG1PORT');
+            }
+            
+            $statusRows[] = $this->i18n($this->ssh('pgrep xray', 'xr') ? 'on' : 'off') . ' ' . $this->i18n('xray');
+            $portRows[] = $this->i18n('on') . ' 443';
+            
+            if (!$vlessOnly) {
+                $statusRows[] = $this->i18n($this->ssh('pgrep caddy', 'np') ? 'on' : 'off') . ' ' . $this->i18n('naive');
+                $statusRows[] = $this->i18n($this->ssh('pgrep ocserv', 'oc') ? 'on' : 'off') . ' ' . $this->i18n('ocserv');
+                $statusRows[] = $this->i18n($this->ssh('pgrep mtproto-proxy', 'tg') ? 'on' : 'off') . ' ' . $this->i18n('mtproto');
+                $portRows[] = $this->i18n('on') . ' 443';
+                $portRows[] = $this->i18n('on') . ' 443';
+                $portRows[] = $this->i18n($c['tg'] ? 'on' : 'off') . ' ' . getenv('TGPORT');
+            }
+            
+            $statusRows[] = $this->i18n(exec("JSON=1 timeout 2 dnslookup google.com ad") ? 'on' : 'off') . ' ' . $this->i18n('ad_title');
+            $portRows[] = $this->i18n($c['ad'] ? 'on' : 'off') . ' 853';
+            
+            if (!$vlessOnly) {
+                $statusRows[] = $this->i18n($this->ssh('pgrep ssserver', 'ss') ? 'on' : 'off') . ' ' . $this->i18n('sh_title');
+                $statusRows[] = $this->i18n($this->ssh('pgrep iodine', 'io') ? 'on' : 'off') . ' ' . $this->i18n('Iodine');
+                $portRows[] = $this->i18n($c['ss'] ? 'on' : 'off') . ' ' . getenv('SSPORT');
+                $portRows[] = $this->i18n($c['io'] ? 'on' : 'off') . ' 53';
+            }
+            
+            $statusRows[] = $this->i18n($this->warpStatus()) . ' ' . $this->i18n('warp');
+            $portRows[] = '';
+            
             $main[] = '<code>';
-            $main[] = $this->alignColumns([
-                [
-                    $this->i18n($this->ssh($this->getPacConf()['amnezia'] ? 'awg' : 'wg', 'wg') ? 'on' : 'off') . ' ' . $this->i18n($this->getPacConf()['amnezia'] ? 'amnezia' : 'wg_title'),
-                    $this->i18n($this->ssh($this->getPacConf()['wg1_amnezia'] ? 'awg' : 'wg', 'wg1') ? 'on' : 'off') . ' ' . $this->i18n($this->getPacConf()['wg1_amnezia'] ? 'amnezia' : 'wg_title'),
-                    $this->i18n($this->ssh('pgrep xray', 'xr') ? 'on' : 'off') . ' ' . $this->i18n('xray'),
-                    $this->i18n($this->ssh('pgrep caddy', 'np') ? 'on' : 'off') . ' ' . $this->i18n('naive'),
-                    $this->i18n($this->ssh('pgrep ocserv', 'oc') ? 'on' : 'off') . ' ' . $this->i18n('ocserv'),
-                    $this->i18n($this->ssh('pgrep mtproto-proxy', 'tg') ? 'on' : 'off') . ' ' . $this->i18n('mtproto'),
-                    $this->i18n(exec("JSON=1 timeout 2 dnslookup google.com ad") ? 'on' : 'off') . ' ' . $this->i18n('ad_title'),
-                    $this->i18n($this->ssh('pgrep ssserver', 'ss') ? 'on' : 'off') . ' ' . $this->i18n('sh_title'),
-                    $this->i18n($this->ssh('pgrep iodine', 'io') ? 'on' : 'off') . ' ' . $this->i18n('Iodine'),
-                    $this->i18n($this->warpStatus()) . ' ' . $this->i18n('warp'),
-                ],
-                [
-                    $this->i18n($c['wg'] ? 'on' : 'off') . ' ' . getenv('WGPORT'),
-                    $this->i18n($c['wg1'] ? 'on' : 'off') . ' ' . getenv('WG1PORT'),
-                    $this->i18n('on') . ' 443',
-                    $this->i18n('on') . ' 443',
-                    $this->i18n('on') . ' 443',
-                    $this->i18n($c['tg'] ? 'on' : 'off') . ' ' . getenv('TGPORT'),
-                    $this->i18n($c['ad'] ? 'on' : 'off') . ' 853',
-                    $this->i18n($c['ss'] ? 'on' : 'off') . ' ' . getenv('SSPORT'),
-                    $this->i18n($c['io'] ? 'on' : 'off') . ' 53',
-                    '',
-                ],
-            ]);
+            $main[] = $this->alignColumns([$statusRows, $portRows]);
             $main[] = '';
             $main[] = $this->alignColumns([
                 [
@@ -4592,85 +4609,112 @@ DNS-over-HTTPS with IP:
             $main[] = '</code>';
 
         }
+
+        $vlessOnly = !empty($conf['vless_only']);
+        
+        $mainMenuData = [];
+        
+        if (!$vlessOnly) {
+            $mainMenuData[] = [
+                [
+                    'text'          => $this->i18n($conf['amnezia'] ? 'amnezia' : 'wg_title'),
+                    'callback_data' => "/changeWG 0",
+                ],
+                [
+                    'text'          => $this->i18n($conf['wg1_amnezia'] ? 'amnezia' : 'wg_title'),
+                    'callback_data' => "/changeWG 1",
+                ],
+            ];
+        }
+        
+        $mainMenuData[] = [
+            [
+                'text'          => $this->i18n('xray'),
+                'callback_data' => "/xray",
+            ],
+        ];
+        
+        if (!$vlessOnly) {
+            $mainMenuData[] = [
+                [
+                    'text'          => $this->i18n('naive'),
+                    'callback_data' => "/menu naive",
+                ],
+            ];
+            $mainMenuData[] = [
+                [
+                    'text'          => $this->i18n('ocserv'),
+                    'callback_data' => "/menu oc",
+                ],
+                [
+                    'text'          => $this->i18n('mtproto'),
+                    'callback_data' => "/mtproto",
+                ],
+            ];
+        }
+        
+        $mainMenuData[] = [
+            [
+                'text'          => $this->i18n('ad_title'),
+                'callback_data' => "/menu adguard",
+            ],
+        ];
+        
+        if (!$vlessOnly) {
+            $mainMenuData[] = [
+                [
+                    'text'          => $this->i18n('warp'),
+                    'callback_data' => "/warp",
+                ],
+            ];
+            $mainMenuData[] = [
+                [
+                    'text'          => $this->i18n('sh_title'),
+                    'callback_data' => "/menu ss",
+                ],
+                [
+                    'text'          => $this->i18n('pac'),
+                    'callback_data' => "/pacMenu 0",
+                ],
+            ];
+            $mainMenuData[] = [
+                [
+                    'text'          => $this->i18n('Iodine'),
+                    'callback_data' => "/iodine",
+                ],
+            ];
+        } else {
+            $mainMenuData[] = [
+                [
+                    'text'          => $this->i18n('warp'),
+                    'callback_data' => "/warp",
+                ],
+            ];
+        }
+        
+        $mainMenuData[] = [
+            [
+                'text'          => $this->i18n('config'),
+                'callback_data' => "/menu config",
+            ],
+        ];
+        $mainMenuData[] = [
+            [
+                'text' => $this->i18n('chat'),
+                'url'  => base64_decode('aHR0cHM6Ly90Lm1lLys0RzMtUTRkX3ZGRXhPRGN5'),
+            ],
+            [
+                'text' => $this->i18n('donate'),
+                'web_app' => [
+                    'url'  => "https://$domain/webapp$hash/donate.html",
+                ]
+            ],
+        ];
+        
         $menu   = [
             'main' => [
                 'text' => implode("\n", $main ?: []),
-                'data' => [
-                    [
-                        [
-                            'text'          => $this->i18n($this->getPacConf()['amnezia'] ? 'amnezia' : 'wg_title'),
-                            'callback_data' => "/changeWG 0",
-                        ],
-                        [
-                            'text'          => $this->i18n($this->getPacConf()['wg1_amnezia'] ? 'amnezia' : 'wg_title'),
-                            'callback_data' => "/changeWG 1",
-                        ],
-                    ],
-                    [
-                        [
-                            'text'          => $this->i18n('xray'),
-                            'callback_data' => "/xray",
-                        ],
-                        [
-                            'text'          => $this->i18n('naive'),
-                            'callback_data' => "/menu naive",
-                        ],
-                    ],
-                    [
-                        [
-                            'text'          => $this->i18n('ocserv'),
-                            'callback_data' => "/menu oc",
-                        ],
-                        [
-                            'text'          => $this->i18n('mtproto'),
-                            'callback_data' => "/mtproto",
-                        ],
-                    ],
-                    [
-                        [
-                            'text'          => $this->i18n('ad_title'),
-                            'callback_data' => "/menu adguard",
-                        ],
-                        [
-                            'text'          => $this->i18n('warp'),
-                            'callback_data' => "/warp",
-                        ],
-                    ],
-                    [
-                        [
-                            'text'          => $this->i18n('sh_title'),
-                            'callback_data' => "/menu ss",
-                        ],
-                        [
-                            'text'          => $this->i18n('pac'),
-                            'callback_data' => "/pacMenu 0",
-                        ],
-                    ],
-                    [
-                        [
-                            'text'          => $this->i18n('Iodine'),
-                            'callback_data' => "/iodine",
-                        ],
-                    ],
-                    [
-                        [
-                            'text'          => $this->i18n('config'),
-                            'callback_data' => "/menu config",
-                        ],
-                    ],
-                    [
-                        [
-                            'text' => $this->i18n('chat'),
-                            'url'  => base64_decode('aHR0cHM6Ly90Lm1lLys0RzMtUTRkX3ZGRXhPRGN5'),
-                        ],
-                        [
-                            'text' => $this->i18n('donate'),
-                            'web_app' => [
-                                'url'  => "https://$domain/webapp$hash/donate.html",
-                            ]
-                        ],
-                    ],
-                ],
+                'data' => $mainMenuData,
             ],
             'wg'           => $type == 'wg'      ? $this->statusWg($arg)                   : false,
             'client'       => $type == 'client'  ? $this->getClient(...explode('_', $arg)) : false,
@@ -4684,6 +4728,7 @@ DNS-over-HTTPS with IP:
             'naive'        => $type == 'naive'   ? $this->naiveMenu()                      : false,
             'mirror'       => $type == 'mirror'  ? $this->mirrorMenu()                     : false,
             'update'       => $type == 'update'  ? $this->updatebot()                      : false,
+            'management'   => $type == 'management' ? $this->managementMenu()            : false,
         ];
 
         $text = $menu[$type ?: 'main' ]['text'];
@@ -4694,7 +4739,7 @@ DNS-over-HTTPS with IP:
             array_unshift($data, [
                 [
                     'text'    => 'changelog',
-                    'web_app' => ['url' => "https://raw.githubusercontent.com/mercurykd/vpnbot/$b/version"],
+                    'web_app' => ['url' => "https://raw.githubusercontent.com/ang3el7z/vpnbot/$b/version"],
                 ],
                 [
                     'text'          => $this->i18n('update bot'),
@@ -5643,7 +5688,7 @@ DNS-over-HTTPS with IP:
         foreach ($r as $v) {
             if (!empty($v['RepoTags'])) {
                 foreach ($v['RepoTags'] as $j) {
-                    if (preg_match('~^mercurykd/vpnbot~', $j)) {
+                    if (preg_match('~^ang3el7z/vpnbot~', $j)) {
                         $i[] = $v['Id'];
                         break;
                     }
@@ -5652,7 +5697,7 @@ DNS-over-HTTPS with IP:
         }
         $r = $this->dockerApi('/containers/json?all=1');
         foreach ($r as $v) {
-            if (preg_match('~^mercurykd/vpnbot~', $v['Image'])) {
+            if (preg_match('~^ang3el7z/vpnbot~', $v['Image'])) {
                 $c[] = $v['ImageID'];
             }
         }
@@ -7937,7 +7982,7 @@ DNS-over-HTTPS with IP:
                 ],
                 [
                     'text'    => $this->i18n('changelog'),
-                    'web_app' => ['url' => "https://raw.githubusercontent.com/mercurykd/vpnbot/$b/version"],
+                    'web_app' => ['url' => "https://raw.githubusercontent.com/ang3el7z/vpnbot/$b/version"],
                 ],
             ],
             [
@@ -8123,6 +8168,12 @@ DNS-over-HTTPS with IP:
             [
                 'text'          => $this->i18n('restart'),
                 'callback_data' => "/restart",
+            ],
+        ];
+        $data[] = [
+            [
+                'text'          => $this->i18n('management'),
+                'callback_data' => "/menu management",
             ],
         ];
         $data[] = [
@@ -9134,5 +9185,183 @@ DNS-over-HTTPS with IP:
             'message_id' => $message_id,
         ];
         return $this->request('unpinChatMessage', $data);
+    }
+
+    public function managementMenu()
+    {
+        $conf = $this->getPacConf();
+        $vlessOnly = !empty($conf['vless_only']);
+        $autostart = $this->checkAutostart();
+
+        $text[] = 'Settings -> ' . $this->i18n('management');
+
+        $data = [
+            [
+                [
+                    'text'          => $this->i18n($vlessOnly ? 'on' : 'off') . ' ' . $this->i18n('vless-only'),
+                    'callback_data' => "/toggleVlessOnly",
+                ],
+            ],
+            [
+                [
+                    'text'          => $this->i18n($autostart ? 'on' : 'off') . ' ' . $this->i18n('autostart'),
+                    'callback_data' => "/toggleAutostart",
+                ],
+            ],
+            [
+                [
+                    'text'          => $this->i18n('fake html'),
+                    'callback_data' => "/addOverrideHtml",
+                ],
+            ],
+            [
+                [
+                    'text'          => $this->i18n('back'),
+                    'callback_data' => "/menu config",
+                ],
+            ],
+        ];
+
+        return [
+            'text' => implode("\n", $text),
+            'data' => $data,
+        ];
+    }
+
+    public function toggleVlessOnly()
+    {
+        $conf = $this->getPacConf();
+        $vlessOnly = !empty($conf['vless_only']);
+        
+        if ($vlessOnly) {
+            unset($conf['vless_only']);
+            $this->setPacConf($conf);
+            $this->enableVlessOnlyServices(false);
+        } else {
+            $conf['vless_only'] = 1;
+            $this->setPacConf($conf);
+            $this->enableVlessOnlyServices(true);
+        }
+        
+        $this->menu('management');
+    }
+
+    public function enableVlessOnlyServices($enable)
+    {
+        $templateVlessOnly = '/config/docker-compose.override.vless-only.yml';
+        $templateFull = '/config/docker-compose.override.full.yml';
+        $overrideFile = '/docker/compose';
+        
+        if ($enable) {
+            if (file_exists($templateVlessOnly)) {
+                $content = file_get_contents($templateVlessOnly);
+                file_put_contents($overrideFile, $content);
+            }
+        } else {
+            if (file_exists($templateFull)) {
+                $content = file_get_contents($templateFull);
+                file_put_contents($overrideFile, $content);
+            } else {
+                file_put_contents($overrideFile, "services: {}\n");
+            }
+        }
+        
+        $this->restartContainersInBackground();
+    }
+    
+    public function restartContainersInBackground()
+    {
+        $ver = getenv('VER') ?: '';
+        $ip = getenv('IP') ?: '';
+        if (empty($ip)) {
+            $ip = trim(shell_exec('hostname -I | awk \'{print $1}\'') ?: '');
+        }
+        
+        $projectRoot = null;
+        $possiblePaths = [
+            '/app/..',
+            '/config/..',
+            dirname(dirname(__DIR__)),
+        ];
+        foreach ($possiblePaths as $path) {
+            $testPath = realpath($path);
+            if ($testPath && file_exists($testPath . '/docker-compose.yml')) {
+                $projectRoot = $testPath;
+                break;
+            }
+        }
+        
+        if ($projectRoot) {
+            $cmd = "cd $projectRoot && IP=$ip VER=$ver docker compose --env-file ./.env --env-file ./override.env down --remove-orphans 2>&1 && IP=$ip VER=$ver docker compose --env-file ./.env --env-file ./override.env up -d --force-recreate 2>&1";
+            exec("nohup sh -c " . escapeshellarg($cmd) . " > /dev/null 2>&1 &", $output, $return);
+        } else {
+            exec("docker compose down --remove-orphans > /dev/null 2>&1 &", $output1, $return1);
+            if (!empty($ip) && !empty($ver)) {
+                exec("IP=$ip VER=$ver docker compose --env-file ./.env --env-file ./override.env up -d --force-recreate > /dev/null 2>&1 &", $output2, $return2);
+            } else {
+                exec("docker compose --env-file ./.env --env-file ./override.env up -d --force-recreate > /dev/null 2>&1 &", $output2, $return2);
+            }
+        }
+    }
+
+    public function toggleAutostart()
+    {
+        $autostart = $this->checkAutostart();
+        
+        if ($autostart) {
+            $this->removeAutostartFromCrontab();
+        } else {
+            $this->addAutostartToCrontab();
+        }
+        
+        $this->menu('management');
+    }
+
+    public function checkAutostart()
+    {
+        $crontab = shell_exec('crontab -l 2>/dev/null');
+        return strpos($crontab, '@reboot cd /root/vpnbot && make r') !== false;
+    }
+
+    public function addAutostartToCrontab()
+    {
+        $crontab = shell_exec('crontab -l 2>/dev/null');
+        $line = '@reboot cd /root/vpnbot && make r';
+        
+        if (strpos($crontab, $line) === false) {
+            $crontab = trim($crontab);
+            if (!empty($crontab)) {
+                $crontab .= "\n";
+            }
+            $crontab .= $line . "\n";
+            
+            $tempFile = tempnam(sys_get_temp_dir(), 'crontab');
+            file_put_contents($tempFile, $crontab);
+            exec("crontab $tempFile 2>&1");
+            unlink($tempFile);
+        }
+    }
+
+    public function removeAutostartFromCrontab()
+    {
+        $crontab = shell_exec('crontab -l 2>/dev/null');
+        $line = '@reboot cd /root/vpnbot && make r';
+        
+        if (strpos($crontab, $line) !== false) {
+            $lines = explode("\n", $crontab);
+            $lines = array_filter($lines, function($l) use ($line) {
+                return trim($l) !== $line;
+            });
+            
+            $newCrontab = implode("\n", $lines);
+            if (!empty(trim($newCrontab))) {
+                $newCrontab .= "\n";
+            }
+            
+            $tempFile = tempnam(sys_get_temp_dir(), 'crontab');
+            file_put_contents($tempFile, $newCrontab);
+            exec("crontab $tempFile 2>&1");
+            unlink($tempFile);
+        }
     }
 }

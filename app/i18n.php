@@ -401,6 +401,18 @@ $i = [
         'en' => 'restart',
         'ru' => 'перезагрузка',
     ],
+    'management'  => [
+        'en' => 'Management',
+        'ru' => 'Управление',
+    ],
+    'vless-only'  => [
+        'en' => 'VLESS-only',
+        'ru' => 'VLESS-only',
+    ],
+    'autostart'  => [
+        'en' => 'Autostart',
+        'ru' => 'Автостарт',
+    ],
 ];
 
 if (file_exists(__DIR__ . '/i18n.override.php')) {
