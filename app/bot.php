@@ -9292,13 +9292,22 @@ DNS-over-HTTPS with IP:
         }
         
         if ($projectRoot) {
+            // Сначала останавливаем отключенные контейнеры напрямую через docker
+            $disabledServices = ['wg', 'wg1', 'oc', 'np', 'tg', 'ss', 'io'];
+            foreach ($disabledServices as $service) {
+                $containerName = $service . '-' . $ver;
+                exec("docker stop $containerName 2>/dev/null", $stopOutput, $stopReturn);
+                exec("docker rm $containerName 2>/dev/null", $rmOutput, $rmReturn);
+            }
+            
             // Используем make r для перезапуска, если доступен
             $makeCmd = "cd $projectRoot && make r 2>&1";
             $makeResult = exec($makeCmd, $makeOutput, $makeReturn);
             
             // Если make не сработал, используем docker compose напрямую
+            // Игнорируем ошибки конфигурации, так как они связаны с profiles
             if ($makeReturn !== 0) {
-                $cmd = "cd $projectRoot && IP=$ip VER=$ver docker compose --env-file ./.env --env-file ./override.env down --remove-orphans 2>&1 && IP=$ip VER=$ver docker compose --env-file ./.env --env-file ./override.env up -d --force-recreate 2>&1";
+                $cmd = "cd $projectRoot && IP=$ip VER=$ver docker compose --env-file ./.env --env-file ./override.env down --remove-orphans 2>&1 || true && IP=$ip VER=$ver docker compose --env-file ./.env --env-file ./override.env up -d --force-recreate 2>&1";
                 exec("nohup sh -c " . escapeshellarg($cmd) . " > /tmp/docker-restart.log 2>&1 &", $output, $return);
             }
         } else {
