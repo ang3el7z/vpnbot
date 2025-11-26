@@ -143,7 +143,7 @@ class Bot
             case preg_match('~^/menu (?P<type>addpeer) (?P<arg>(?:-)?\d+)$~', $this->input['callback'], $m):
             case preg_match('~^/menu (?P<type>wg) (?P<arg>(?:-)?\d+)$~', $this->input['callback'], $m):
             case preg_match('~^/menu (?P<type>client) (?P<arg>\d+(?:_(?:-)?\d+)?)$~', $this->input['callback'], $m):
-            case preg_match('~^/menu (?P<type>pac|adguard|config|ss|lang|oc|naive|mirror|update)$~', $this->input['callback'], $m):
+            case preg_match('~^/menu (?P<type>pac|adguard|config|ss|lang|oc|naive|mirror|update|container)$~', $this->input['callback'], $m):
                 $this->menu(type: $m['type'] ?? false, arg: $m['arg'] ?? false);
                 break;
             case preg_match('~^/changeWG (\d+)$~', $this->input['callback'], $m):
@@ -286,6 +286,9 @@ class Bot
                 break;
             case preg_match('~^/hidePort (\w+)$~', $this->input['callback'], $m):
                 $this->hidePort($m[1]);
+                break;
+            case preg_match('~^/toggleContainer (\w+)$~', $this->input['callback'], $m):
+                $this->toggleContainer($m[1]);
                 break;
             case preg_match('~^/deleteYes (\w+)$~', $this->input['callback'], $m):
                 $this->deleteYes($m[1]);
@@ -4550,32 +4553,58 @@ DNS-over-HTTPS with IP:
             $main[] = '';
 
             $main[] = '<code>';
-            $main[] = $this->alignColumns([
-                [
-                    $this->i18n($this->ssh($this->getPacConf()['amnezia'] ? 'awg' : 'wg', 'wg') ? 'on' : 'off') . ' ' . $this->i18n($this->getPacConf()['amnezia'] ? 'amnezia' : 'wg_title'),
-                    $this->i18n($this->ssh($this->getPacConf()['wg1_amnezia'] ? 'awg' : 'wg', 'wg1') ? 'on' : 'off') . ' ' . $this->i18n($this->getPacConf()['wg1_amnezia'] ? 'amnezia' : 'wg_title'),
-                    $this->i18n($this->ssh('pgrep xray', 'xr') ? 'on' : 'off') . ' ' . $this->i18n('xray'),
-                    $this->i18n($this->ssh('pgrep caddy', 'np') ? 'on' : 'off') . ' ' . $this->i18n('naive'),
-                    $this->i18n($this->ssh('pgrep ocserv', 'oc') ? 'on' : 'off') . ' ' . $this->i18n('ocserv'),
-                    $this->i18n($this->ssh('pgrep mtproto-proxy', 'tg') ? 'on' : 'off') . ' ' . $this->i18n('mtproto'),
-                    $this->i18n(exec("JSON=1 timeout 2 dnslookup google.com ad") ? 'on' : 'off') . ' ' . $this->i18n('ad_title'),
-                    $this->i18n($this->ssh('pgrep ssserver', 'ss') ? 'on' : 'off') . ' ' . $this->i18n('sh_title'),
-                    $this->i18n($this->ssh('pgrep iodine', 'io') ? 'on' : 'off') . ' ' . $this->i18n('Iodine'),
-                    $this->i18n($this->warpStatus()) . ' ' . $this->i18n('warp'),
-                ],
-                [
-                    $this->i18n($c['wg'] ? 'on' : 'off') . ' ' . getenv('WGPORT'),
-                    $this->i18n($c['wg1'] ? 'on' : 'off') . ' ' . getenv('WG1PORT'),
-                    $this->i18n('on') . ' 443',
-                    $this->i18n('on') . ' 443',
-                    $this->i18n('on') . ' 443',
-                    $this->i18n($c['tg'] ? 'on' : 'off') . ' ' . getenv('TGPORT'),
-                    $this->i18n($c['ad'] ? 'on' : 'off') . ' 853',
-                    $this->i18n($c['ss'] ? 'on' : 'off') . ' ' . getenv('SSPORT'),
-                    $this->i18n($c['io'] ? 'on' : 'off') . ' 53',
-                    '',
-                ],
-            ]);
+            
+            // Формируем статусы только для включенных контейнеров
+            $statusColumn1 = [];
+            $statusColumn2 = [];
+            
+            if ($this->isContainerEnabled('wg')) {
+                $statusColumn1[] = $this->i18n($this->ssh($this->getPacConf()['amnezia'] ? 'awg' : 'wg', 'wg') ? 'on' : 'off') . ' ' . $this->i18n($this->getPacConf()['amnezia'] ? 'amnezia' : 'wg_title');
+                $statusColumn2[] = $this->i18n($c['wg'] ? 'on' : 'off') . ' ' . getenv('WGPORT');
+            }
+            if ($this->isContainerEnabled('wg1')) {
+                $statusColumn1[] = $this->i18n($this->ssh($this->getPacConf()['wg1_amnezia'] ? 'awg' : 'wg', 'wg1') ? 'on' : 'off') . ' ' . $this->i18n($this->getPacConf()['wg1_amnezia'] ? 'amnezia' : 'wg_title');
+                $statusColumn2[] = $this->i18n($c['wg1'] ? 'on' : 'off') . ' ' . getenv('WG1PORT');
+            }
+            if ($this->isContainerEnabled('xr')) {
+                $statusColumn1[] = $this->i18n($this->ssh('pgrep xray', 'xr') ? 'on' : 'off') . ' ' . $this->i18n('xray');
+                $statusColumn2[] = $this->i18n('on') . ' 443';
+            }
+            if ($this->isContainerEnabled('np')) {
+                $statusColumn1[] = $this->i18n($this->ssh('pgrep caddy', 'np') ? 'on' : 'off') . ' ' . $this->i18n('naive');
+                $statusColumn2[] = $this->i18n('on') . ' 443';
+            }
+            if ($this->isContainerEnabled('oc')) {
+                $statusColumn1[] = $this->i18n($this->ssh('pgrep ocserv', 'oc') ? 'on' : 'off') . ' ' . $this->i18n('ocserv');
+                $statusColumn2[] = $this->i18n('on') . ' 443';
+            }
+            if ($this->isContainerEnabled('tg')) {
+                $statusColumn1[] = $this->i18n($this->ssh('pgrep mtproto-proxy', 'tg') ? 'on' : 'off') . ' ' . $this->i18n('mtproto');
+                $statusColumn2[] = $this->i18n($c['tg'] ? 'on' : 'off') . ' ' . getenv('TGPORT');
+            }
+            if ($this->isContainerEnabled('ad')) {
+                $statusColumn1[] = $this->i18n(exec("JSON=1 timeout 2 dnslookup google.com ad") ? 'on' : 'off') . ' ' . $this->i18n('ad_title');
+                $statusColumn2[] = $this->i18n($c['ad'] ? 'on' : 'off') . ' 853';
+            }
+            if ($this->isContainerEnabled('ss')) {
+                $statusColumn1[] = $this->i18n($this->ssh('pgrep ssserver', 'ss') ? 'on' : 'off') . ' ' . $this->i18n('sh_title');
+                $statusColumn2[] = $this->i18n($c['ss'] ? 'on' : 'off') . ' ' . getenv('SSPORT');
+            }
+            if ($this->isContainerEnabled('io')) {
+                $statusColumn1[] = $this->i18n($this->ssh('pgrep iodine', 'io') ? 'on' : 'off') . ' ' . $this->i18n('Iodine');
+                $statusColumn2[] = $this->i18n($c['io'] ? 'on' : 'off') . ' 53';
+            }
+            if ($this->isContainerEnabled('wp')) {
+                $statusColumn1[] = $this->i18n($this->warpStatus()) . ' ' . $this->i18n('warp');
+                $statusColumn2[] = '';
+            }
+            
+            if (!empty($statusColumn1)) {
+                $main[] = $this->alignColumns([
+                    $statusColumn1,
+                    $statusColumn2,
+                ]);
+            }
             $main[] = '';
             $main[] = $this->alignColumns([
                 [
@@ -4592,85 +4621,117 @@ DNS-over-HTTPS with IP:
             $main[] = '</code>';
 
         }
+        $mainButtons = [];
+        
+        // WireGuard кнопки
+        if ($this->isContainerEnabled('wg')) {
+            $mainButtons[] = [
+                'text'          => $this->i18n($this->getPacConf()['amnezia'] ? 'amnezia' : 'wg_title'),
+                'callback_data' => "/changeWG 0",
+            ];
+        }
+        if ($this->isContainerEnabled('wg1')) {
+            if (empty($mainButtons)) {
+                $mainButtons[] = [];
+            }
+            $mainButtons[count($mainButtons) - 1][] = [
+                'text'          => $this->i18n($this->getPacConf()['wg1_amnezia'] ? 'amnezia' : 'wg_title'),
+                'callback_data' => "/changeWG 1",
+            ];
+        }
+        
+        // Xray и Naive
+        $row2 = [];
+        if ($this->isContainerEnabled('xr')) {
+            $row2[] = [
+                'text'          => $this->i18n('xray'),
+                'callback_data' => "/xray",
+            ];
+        }
+        if ($this->isContainerEnabled('np')) {
+            $row2[] = [
+                'text'          => $this->i18n('naive'),
+                'callback_data' => "/menu naive",
+            ];
+        }
+        if (!empty($row2)) {
+            $mainButtons[] = $row2;
+        }
+        
+        // OCserv и MTProto
+        $row3 = [];
+        if ($this->isContainerEnabled('oc')) {
+            $row3[] = [
+                'text'          => $this->i18n('ocserv'),
+                'callback_data' => "/menu oc",
+            ];
+        }
+        if ($this->isContainerEnabled('tg')) {
+            $row3[] = [
+                'text'          => $this->i18n('mtproto'),
+                'callback_data' => "/mtproto",
+            ];
+        }
+        if (!empty($row3)) {
+            $mainButtons[] = $row3;
+        }
+        
+        // AdGuard и Warp
+        $row4 = [];
+        if ($this->isContainerEnabled('ad')) {
+            $row4[] = [
+                'text'          => $this->i18n('ad_title'),
+                'callback_data' => "/menu adguard",
+            ];
+        }
+        if ($this->isContainerEnabled('wp')) {
+            $row4[] = [
+                'text'          => $this->i18n('warp'),
+                'callback_data' => "/warp",
+            ];
+        }
+        if (!empty($row4)) {
+            $mainButtons[] = $row4;
+        }
+        
+        // Shadowsocks и PAC
+        $row5 = [];
+        if ($this->isContainerEnabled('ss')) {
+            $row5[] = [
+                'text'          => $this->i18n('sh_title'),
+                'callback_data' => "/menu ss",
+            ];
+        }
+        $row5[] = [
+            'text'          => $this->i18n('pac'),
+            'callback_data' => "/pacMenu 0",
+        ];
+        if (!empty($row5)) {
+            $mainButtons[] = $row5;
+        }
+        
+        // Iodine
+        if ($this->isContainerEnabled('io')) {
+            $mainButtons[] = [
+                [
+                    'text'          => $this->i18n('Iodine'),
+                    'callback_data' => "/iodine",
+                ],
+            ];
+        }
+        
+        // Config всегда показываем
+        $mainButtons[] = [
+            [
+                'text'          => $this->i18n('config'),
+                'callback_data' => "/menu config",
+            ],
+        ];
+        
         $menu   = [
             'main' => [
                 'text' => implode("\n", $main ?: []),
-                'data' => [
-                    [
-                        [
-                            'text'          => $this->i18n($this->getPacConf()['amnezia'] ? 'amnezia' : 'wg_title'),
-                            'callback_data' => "/changeWG 0",
-                        ],
-                        [
-                            'text'          => $this->i18n($this->getPacConf()['wg1_amnezia'] ? 'amnezia' : 'wg_title'),
-                            'callback_data' => "/changeWG 1",
-                        ],
-                    ],
-                    [
-                        [
-                            'text'          => $this->i18n('xray'),
-                            'callback_data' => "/xray",
-                        ],
-                        [
-                            'text'          => $this->i18n('naive'),
-                            'callback_data' => "/menu naive",
-                        ],
-                    ],
-                    [
-                        [
-                            'text'          => $this->i18n('ocserv'),
-                            'callback_data' => "/menu oc",
-                        ],
-                        [
-                            'text'          => $this->i18n('mtproto'),
-                            'callback_data' => "/mtproto",
-                        ],
-                    ],
-                    [
-                        [
-                            'text'          => $this->i18n('ad_title'),
-                            'callback_data' => "/menu adguard",
-                        ],
-                        [
-                            'text'          => $this->i18n('warp'),
-                            'callback_data' => "/warp",
-                        ],
-                    ],
-                    [
-                        [
-                            'text'          => $this->i18n('sh_title'),
-                            'callback_data' => "/menu ss",
-                        ],
-                        [
-                            'text'          => $this->i18n('pac'),
-                            'callback_data' => "/pacMenu 0",
-                        ],
-                    ],
-                    [
-                        [
-                            'text'          => $this->i18n('Iodine'),
-                            'callback_data' => "/iodine",
-                        ],
-                    ],
-                    [
-                        [
-                            'text'          => $this->i18n('config'),
-                            'callback_data' => "/menu config",
-                        ],
-                    ],
-                    [
-                        [
-                            'text' => $this->i18n('chat'),
-                            'url'  => base64_decode('aHR0cHM6Ly90Lm1lLys0RzMtUTRkX3ZGRXhPRGN5'),
-                        ],
-                        [
-                            'text' => $this->i18n('donate'),
-                            'web_app' => [
-                                'url'  => "https://$domain/webapp$hash/donate.html",
-                            ]
-                        ],
-                    ],
-                ],
+                'data' => $mainButtons,
             ],
             'wg'           => $type == 'wg'      ? $this->statusWg($arg)                   : false,
             'client'       => $type == 'client'  ? $this->getClient(...explode('_', $arg)) : false,
@@ -4684,6 +4745,7 @@ DNS-over-HTTPS with IP:
             'naive'        => $type == 'naive'   ? $this->naiveMenu()                      : false,
             'mirror'       => $type == 'mirror'  ? $this->mirrorMenu()                     : false,
             'update'       => $type == 'update'  ? $this->updatebot()                      : false,
+            'container'    => $type == 'container' ? $this->containersMenu()               : false,
         ];
 
         $text = $menu[$type ?: 'main' ]['text'];
@@ -8074,6 +8136,12 @@ DNS-over-HTTPS with IP:
                 'callback_data' => "/ipMenu",
             ],
         ];
+        $data[] = [
+            [
+                'text'          => $this->i18n('containers'),
+                'callback_data' => "/menu container",
+            ],
+        ];
 
         $data[] = [
             [
@@ -8234,6 +8302,131 @@ DNS-over-HTTPS with IP:
         $pac['restart'] = 1;
         $this->setPacConf($pac);
         $this->ports();
+    }
+
+    public function isContainerEnabled($container)
+    {
+        $ver = getenv('VER');
+        $containerMap = [
+            'wg' => "wireguard-$ver",
+            'wg1' => "wireguard1-$ver",
+            'xr' => "xray-$ver",
+            'np' => "naive-$ver",
+            'oc' => "openconnect-$ver",
+            'tg' => "mtproto-$ver",
+            'ad' => "adguard-$ver",
+            'ss' => "shadowsocks-$ver",
+            'io' => "iodine-$ver",
+            'wp' => "warp-$ver",
+        ];
+        
+        if (!isset($containerMap[$container])) {
+            return false;
+        }
+        
+        $containerName = $containerMap[$container];
+        // Проверяем через docker compose ps для более надежной проверки
+        $output = shell_exec("cd / && IP=" . getenv('IP') . " VER=$ver docker compose --env-file ./.env --env-file ./override.env ps --filter 'name=$container' --format '{{.Name}}' 2>/dev/null");
+        $output = trim($output ?: '');
+        
+        // Если не нашли через compose, пробуем через docker ps
+        if (empty($output)) {
+            $output = exec("docker ps --filter 'name=$containerName' --format '{{.Names}}' 2>/dev/null");
+            $output = trim($output ?: '');
+        }
+        
+        return !empty($output);
+    }
+
+    public function containersMenu()
+    {
+        $containers = [
+            'wg' => $this->getPacConf()['amnezia'] ? 'amnezia' : 'wg_title',
+            'wg1' => $this->getPacConf()['wg1_amnezia'] ? 'amnezia' : 'wg_title',
+            'xr' => 'xray',
+            'np' => 'naive',
+            'oc' => 'ocserv',
+            'tg' => 'mtproto',
+            'ad' => 'ad_title',
+            'ss' => 'sh_title',
+            'io' => 'Iodine',
+            'wp' => 'warp',
+        ];
+        
+        $text[] = $this->i18n('containers');
+        $text[] = '';
+        
+        $data = [];
+        foreach ($containers as $container => $label) {
+            $enabled = $this->isContainerEnabled($container);
+            $labelText = $this->i18n($label);
+            $status = $this->i18n($enabled ? 'on' : 'off');
+            $data[] = [
+                [
+                    'text' => "$status $labelText",
+                    'callback_data' => "/toggleContainer $container",
+                ],
+            ];
+        }
+        
+        $data[] = [
+            [
+                'text' => $this->i18n('back'),
+                'callback_data' => "/menu config",
+            ],
+        ];
+        
+        return [
+            'text' => implode("\n", $text),
+            'data' => $data,
+        ];
+    }
+
+    public function toggleContainer($container)
+    {
+        $ver = getenv('VER');
+        $containerMap = [
+            'wg' => "wireguard-$ver",
+            'wg1' => "wireguard1-$ver",
+            'xr' => "xray-$ver",
+            'np' => "naive-$ver",
+            'oc' => "openconnect-$ver",
+            'tg' => "mtproto-$ver",
+            'ad' => "adguard-$ver",
+            'ss' => "shadowsocks-$ver",
+            'io' => "iodine-$ver",
+            'wp' => "warp-$ver",
+        ];
+        
+        if (!isset($containerMap[$container])) {
+            return;
+        }
+        
+        $enabled = $this->isContainerEnabled($container);
+        $serviceName = $container;
+        
+        if ($enabled) {
+            // Останавливаем контейнер
+            exec("cd / && IP=" . getenv('IP') . " VER=$ver docker compose --env-file ./.env --env-file ./override.env stop $serviceName 2>&1");
+        } else {
+            // Запускаем контейнер
+            exec("cd / && IP=" . getenv('IP') . " VER=$ver docker compose --env-file ./.env --env-file ./override.env up -d $serviceName 2>&1");
+        }
+        
+        // Небольшая задержка для обновления статуса
+        sleep(5);
+        
+        // Обновляем меню
+        $menu = $this->menu('container', false, true);
+        if (empty($menu)) {
+            $menu = $this->containersMenu();
+        }
+        $this->update(
+            $this->input['chat'],
+            $this->input['message_id'],
+            $menu['text'] ?? $this->i18n('containers'),
+            $menu['data'] ?? false,
+        );
     }
 
     public function branches()

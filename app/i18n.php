@@ -401,6 +401,14 @@ $i = [
         'en' => 'restart',
         'ru' => 'перезагрузка',
     ],
+    'containers'  => [
+        'en' => 'Containers',
+        'ru' => 'Контейнеры',
+    ],
+    'Iodine'  => [
+        'en' => 'Iodine',
+        'ru' => 'Iodine',
+    ],
 ];
 
 if (file_exists(__DIR__ . '/i18n.override.php')) {
