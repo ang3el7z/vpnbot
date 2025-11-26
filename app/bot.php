@@ -9292,8 +9292,15 @@ DNS-over-HTTPS with IP:
         }
         
         if ($projectRoot) {
-            $cmd = "cd $projectRoot && IP=$ip VER=$ver docker compose --env-file ./.env --env-file ./override.env down --remove-orphans 2>&1 && IP=$ip VER=$ver docker compose --env-file ./.env --env-file ./override.env up -d --force-recreate 2>&1";
-            exec("nohup sh -c " . escapeshellarg($cmd) . " > /dev/null 2>&1 &", $output, $return);
+            // Используем make r для перезапуска, если доступен
+            $makeCmd = "cd $projectRoot && make r 2>&1";
+            $makeResult = exec($makeCmd, $makeOutput, $makeReturn);
+            
+            // Если make не сработал, используем docker compose напрямую
+            if ($makeReturn !== 0) {
+                $cmd = "cd $projectRoot && IP=$ip VER=$ver docker compose --env-file ./.env --env-file ./override.env down --remove-orphans 2>&1 && IP=$ip VER=$ver docker compose --env-file ./.env --env-file ./override.env up -d --force-recreate 2>&1";
+                exec("nohup sh -c " . escapeshellarg($cmd) . " > /tmp/docker-restart.log 2>&1 &", $output, $return);
+            }
         } else {
             exec("docker compose down --remove-orphans > /dev/null 2>&1 &", $output1, $return1);
             if (!empty($ip) && !empty($ver)) {

@@ -25,9 +25,15 @@ services:
                 condition: service_started
     service:
         depends_on:
-            - up
-            - ng
-            - php
-            - ad
-            - xr
-            - proxy
+            up:
+                condition: service_started
+            ng:
+                condition: service_started
+            php:
+                condition: service_healthy
+            ad:
+                condition: service_started
+            xr:
+                condition: service_started
+            proxy:
+                condition: service_started
