@@ -7304,7 +7304,15 @@ DNS-over-HTTPS with IP:
                 break;
             case 'si':
                 $c['outbounds'][$index]['uuid']   = '~uid~';
-                if ($pac['transport'] != 'Reality') {
+                if ($pac['transport'] == 'xhttp') {
+                    unset($c['outbounds'][$index]['tls']['reality']);
+                    unset($c['outbounds'][$index]['flow']);
+                    $c['outbounds'][$index]["transport"] = [
+                        "type" => "xhttp",
+                        "path" => "/xhttp$hash"
+                    ];
+                    $c['outbounds'][$index]['tls']['server_name'] = '~domain~';
+                } elseif ($pac['transport'] != 'Reality') {
                     unset($c['outbounds'][$index]['tls']['reality']);
                     unset($c['outbounds'][$index]['flow']);
                     $c['outbounds'][$index]["transport"] = [
