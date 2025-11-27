@@ -5615,6 +5615,9 @@ DNS-over-HTTPS with IP:
                 return "sing-box://import-remote-profile/?url={$si}#{$c['inbounds'][0]['settings']['clients'][$i]['email']}";
 
             default:
+                if ($pac['transport'] == 'xhttp') {
+                    return "vless://{$c['inbounds'][0]['settings']['clients'][$i]['id']}@$domain:443?security=tls&sni=$domain&fp=chrome&type=xhttp&path=%2Fxhttp$hash#{$c['inbounds'][0]['settings']['clients'][$i]['email']}";
+                }
                 if ($pac['transport'] != 'Reality') {
                     return "vless://{$c['inbounds'][0]['settings']['clients'][$i]['id']}@$domain:443?flow=&path=%2Fws$hash&security=tls&sni=$domain&fp=chrome&type=ws#{$c['inbounds'][0]['settings']['clients'][$i]['email']}";
                 }
@@ -6320,8 +6323,12 @@ DNS-over-HTTPS with IP:
                 'callback_data' => "/changeTransport",
             ],
             [
-                'text'          => $this->i18n('Websocket') . ' ' . ($p['transport'] != 'Reality' ? $this->i18n('on') : $this->i18n('off')),
+                'text'          => $this->i18n('Websocket') . ' ' . ($p['transport'] == 'Websocket' || empty($p['transport']) ? $this->i18n('on') : $this->i18n('off')),
                 'callback_data' => "/changeTransport 1",
+            ],
+            [
+                'text'          => 'xhttp ' . ($p['transport'] == 'xhttp' ? $this->i18n('on') : $this->i18n('off')),
+                'callback_data' => "/changeTransport 2",
             ],
         ];
         $ip_count      = $p['ip_count'] ?: 1;
@@ -8485,7 +8492,12 @@ DNS-over-HTTPS with IP:
         $h = $this->getHashBot();
         $p['reality']['domain']      = $p['reality']['domain'] ?: 'web.telegram.org';
         $p['reality']['destination'] = $p['reality']['destination'] ?: $p['reality']['domain'] . ':443';
-        $p['transport']              = $ws ? 'Websocket' : 'Reality';
+        
+        $type = 'Reality';
+        if ($ws == 1) $type = 'Websocket';
+        if ($ws == 2) $type = 'xhttp';
+        $p['transport'] = $type;
+
         if (empty($p['xray'])) {
             $shortId = trim($this->ssh('openssl rand -hex 8', 'xr'));
             $keys    = $this->ssh('xray x25519', 'xr');
@@ -8497,7 +8509,7 @@ DNS-over-HTTPS with IP:
             $p['reality']['shortId'] = $shortId;
             $p['reality']['privateKey'] = $private;
         }
-        if (!empty($ws)) {
+        if ($type == 'Websocket') {
             $p['reality']['domain']      = $x['inbounds'][0]['streamSettings']['realitySettings']['serverNames'][0] ?: $p['reality']['domain'];
             $p['reality']['destination'] = $x['inbounds'][0]['streamSettings']['realitySettings']['dest'] ?: $p['reality']['destination'];
             $p['reality']['shortId']     = $x['inbounds'][0]['streamSettings']['realitySettings']['shortIds'][0] ?: $p['reality']['shortId'];
@@ -8508,6 +8520,19 @@ DNS-over-HTTPS with IP:
                 "network"    => "ws",
                 "wsSettings" => [
                     "path" => "/ws$h"
+                ]
+            ];
+        } elseif ($type == 'xhttp') {
+            $p['reality']['domain']      = $x['inbounds'][0]['streamSettings']['realitySettings']['serverNames'][0] ?: $p['reality']['domain'];
+            $p['reality']['destination'] = $x['inbounds'][0]['streamSettings']['realitySettings']['dest'] ?: $p['reality']['destination'];
+            $p['reality']['shortId']     = $x['inbounds'][0]['streamSettings']['realitySettings']['shortIds'][0] ?: $p['reality']['shortId'];
+            foreach ($x['inbounds'][0]['settings']['clients'] as $k => $v) {
+                unset($x['inbounds'][0]['settings']['clients'][$k]['flow']);
+            }
+            $x['inbounds'][0]['streamSettings'] = [
+                "network"       => "xhttp",
+                "xhttpSettings" => [
+                    "path" => "/xhttp$h"
                 ]
             ];
         } else {
@@ -8538,7 +8563,7 @@ DNS-over-HTTPS with IP:
                 "security" => "reality"
             ];
         }
-        $this->setUpstreamDomain($ws ? 't' : ($p['reality']['domain'] ?: $x['inbounds'][0]['streamSettings']['realitySettings']['serverNames'][0]));
+        $this->setUpstreamDomain($type != 'Reality' ? 't' : ($p['reality']['domain'] ?: $x['inbounds'][0]['streamSettings']['realitySettings']['serverNames'][0]));
         $this->setPacConf($p);
         $this->restartXray($x);
         $this->xray();
